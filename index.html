@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Implementing Database Encryption in Python</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        pre {
+            background-color: #f6f8fa;
+            padding: 16px;
+            border-radius: 6px;
+            overflow-x: auto;
+            position: relative;
+        }
+        code {
+            font-family: 'Consolas', 'Monaco', monospace;
+            background-color: #f6f8fa;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffeeba;
+            padding: 12px;
+            margin: 16px 0;
+        }
+        .note {
+            background-color: #e7f5ff;
+            border-left: 4px solid #74c0fc;
+            padding: 12px;
+            margin: 16px 0;
+        }
+        h2 {
+            margin-top: 32px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #eaecef;
+        }
+        .checklist {
+            background-color: #f8f9fa;
+            padding: 16px;
+            border-radius: 6px;
+            margin: 16px 0;
+        }
+        .checklist h3 {
+            margin-top: 0;
+        }
+
+        /* Syntax Highlighting Classes */
+        .keyword { color: #cf222e; }  /* red - Python keywords */
+        .string { color: #0a3069; }   /* dark blue - string literals */
+        .comment { color: #6e7781; }  /* gray - comments */
+        .function { color: #8250df; } /* purple - function names */
+        .class { color: #953800; }    /* orange - class names */
+        .number { color: #0550ae; }   /* blue - numbers */
+        .variable { color: #24292f; } /* black - variables */
+        .decorator { color: #116329; } /* green - decorators */
+    </style>
+</head>
+<body>
+    <h1>Implementing Database Encryption in Python</h1>
+    
+    <p>This guide demonstrates how to implement encryption for sensitive data in your SQLite database using the Fernet encryption from the cryptography library.</p>
+
+    <h2>Setup</h2>
+
+    <h3>1. Install Required Package</h3>
+    <pre>pip install cryptography</pre>
+
+    <h3>2. Create Environment Variable</h3>
+    <p>Create a <code>.env</code> file in your project root:</p>
+    <pre>ENCRYPTION_KEY=your-secret-key-here</pre>
+
+    <h2>Implementation</h2>
+
+    <p>Here's a complete working example that demonstrates encryption:</p>
+
+    <pre>
+<span class="keyword">import</span> os
+<span class="keyword">from</span> dotenv <span class="keyword">import</span> load_dotenv
+<span class="keyword">from</span> cryptography.fernet <span class="keyword">import</span> Fernet
+<span class="keyword">import</span> sqlite3
+
+<span class="comment"># Load the encryption key from .env</span>
+<span class="function">load_dotenv</span>()
+encryption_key = os.<span class="function">getenv</span>(<span class="string">'ENCRYPTION_KEY'</span>)
+
+<span class="comment"># If no key exists, generate one and save it (do this once)</span>
+<span class="keyword">if not</span> encryption_key:
+    encryption_key = Fernet.<span class="function">generate_key</span>()
+    <span class="keyword">with</span> <span class="function">open</span>(<span class="string">'.env'</span>, <span class="string">'w'</span>) <span class="keyword">as</span> f:
+        f.<span class="function">write</span>(<span class="string">f'ENCRYPTION_KEY={encryption_key.decode()}'</span>)
+
+<span class="comment"># Create Fernet instance</span>
+fernet = <span class="function">Fernet</span>(encryption_key.<span class="function">encode</span>())
+
+<span class="comment"># Create database and table</span>
+conn = sqlite3.<span class="function">connect</span>(<span class="string">'example.db'</span>)
+cursor = conn.<span class="function">cursor</span>()
+
+<span class="comment"># Create a table with an encrypted field</span>
+cursor.<span class="function">execute</span>(<span class="string">'''
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY,
+        username TEXT NOT NULL,
+        encrypted_ssn TEXT NOT NULL
+    )
+'''</span>)
+
+<span class="decorator">@staticmethod</span>
+<span class="keyword">def</span> <span class="function">encrypt_data</span>(data: <span class="class">str</span>) -> <span class="class">str</span>:
+    <span class="string">"""Encrypt a string"""</span>
+    <span class="keyword">return</span> fernet.<span class="function">encrypt</span>(data.<span class="function">encode</span>()).<span class="function">decode</span>()
+
+<span class="keyword">def</span> <span class="function">decrypt_data</span>(encrypted_data: <span class="class">str</span>) -> <span class="class">str</span>:
+    <span class="string">"""Decrypt an encrypted string"""</span>
+    <span class="keyword">return</span> fernet.<span class="function">decrypt</span>(encrypted_data.<span class="function">encode</span>()).<span class="function">decode</span>()
+
+<span class="comment"># Example usage</span>
+<span class="keyword">def</span> <span class="function">add_user</span>(username: <span class="class">str</span>, ssn: <span class="class">str</span>):
+    encrypted_ssn = <span class="function">encrypt_data</span>(ssn)
+    cursor.<span class="function">execute</span>(
+        <span class="string">'INSERT INTO users (username, encrypted_ssn) VALUES (?, ?)'</span>,
+        (username, encrypted_ssn)
+    )
+    conn.<span class="function">commit</span>()
+
+<span class="keyword">def</span> <span class="function">get_user</span>(username: <span class="class">str</span>) -> <span class="class">dict</span>:
+    cursor.<span class="function">execute</span>(<span class="string">'SELECT * FROM users WHERE username = ?'</span>, (username,))
+    user = cursor.<span class="function">fetchone</span>()
+    <span class="keyword">if</span> user:
+        <span class="keyword">return</span> {
+            <span class="string">'id'</span>: user[<span class="number">0</span>],
+            <span class="string">'username'</span>: user[<span class="number">1</span>],
+            <span class="string">'ssn'</span>: <span class="function">decrypt_data</span>(user[<span class="number">2</span>])
+        }
+    <span class="keyword">return</span> <span class="keyword">None</span>
+
+<span class="comment"># Demo usage</span>
+<span class="keyword">if</span> __name__ == <span class="string">'__main__'</span>:
+    <span class="comment"># Add a user with encrypted SSN</span>
+    <span class="function">add_user</span>(<span class="string">'john_doe'</span>, <span class="string">'123-45-6789'</span>)
+    
+    <span class="comment"># Retrieve and decrypt the user's SSN</span>
+    user = <span class="function">get_user</span>(<span class="string">'john_doe'</span>)
+    <span class="function">print</span>(<span class="string">f"Retrieved user: {user}"</span>)
+
+    <span class="comment"># Show the encrypted data in the database</span>
+    cursor.<span class="function">execute</span>(<span class="string">'SELECT * FROM users'</span>)
+    raw_data = cursor.<span class="function">fetchall</span>()
+    <span class="function">print</span>(<span class="string">f"\nRaw database content: {raw_data}"</span>)
+
+    conn.<span class="function">close</span>()</pre>
+
+    <h2>Understanding the Code</h2>
+    
+    <p>Key components explained:</p>
+    <ul>
+        <li>Uses <code>python-dotenv</code> to manage environment variables</li>
+        <li>Uses <code>cryptography.fernet</code> for symmetric encryption</li>
+        <li>Automatically generates an encryption key if none exists</li>
+        <li>Provides functions to encrypt and decrypt data</li>
+        <li>Demonstrates storing and retrieving encrypted data</li>
+    </ul>
+
+    <div class="note">
+        <strong>Important:</strong> Never store the actual encryption key in your code or commit it to version control. It should always be in the .env file, which should be in your .gitignore.
+    </div>
+
+    <h2>Testing Your Implementation</h2>
+    
+    <ol>
+        <li>Run the script</li>
+        <li>Observe the encrypted data in the database</li>
+        <li>Verify that the decrypted data matches the original</li>
+        <li>Try accessing the data with a wrong key to ensure it fails</li>
+    </ol>
+
+    <div class="checklist">
+        <h3>Implementation Checklist ✅</h3>
+        <ol>
+            <li>Installed cryptography package</li>
+            <li>Created .env file with encryption key</li>
+            <li>Implemented encryption/decryption functions</li>
+            <li>Created database table with encrypted field</li>
+            <li>Tested adding encrypted data</li>
+            <li>Tested retrieving and decrypting data</li>
+            <li>Added .env to .gitignore</li>
+        </ol>
+    </div>
+
+    <h2>Common Issues</h2>
+    <ul>
+        <li>Make sure the encryption key is properly encoded/decoded when saving/loading</li>
+        <li>Always encode strings before encryption and decode after decryption</li>
+        <li>Remember to commit database changes after inserting data</li>
+        <li>Ensure .env file is in the correct directory relative to your script</li>
+    </ul>
+
+    <div class="warning">
+        <strong>Note:</strong> This is a basic example using symmetric encryption. In a production environment, you might want to consider additional security measures and possibly asymmetric encryption depending on your needs.
+    </div>
+</body>
+</html>
